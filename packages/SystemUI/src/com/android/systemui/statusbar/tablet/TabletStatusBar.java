@@ -1289,7 +1289,10 @@ public class TabletStatusBar extends StatusBar implements
     public void onClickRecentButton() {
         if (DEBUG) Slog.d(TAG, "clicked recent apps; disabled=" + mDisabled);
         if ((mDisabled & StatusBarManager.DISABLE_EXPAND) == 0) {
-            toggleRecentApps();
+            int msg = (mRecentsPanel.getVisibility() == View.VISIBLE)
+                ? MSG_CLOSE_RECENTS_PANEL : MSG_OPEN_RECENTS_PANEL;
+            mHandler.removeMessages(msg);
+            mHandler.sendEmptyMessage(msg);
         }
     }
 
