@@ -25,6 +25,7 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.StatusBarManager;
 import android.content.BroadcastReceiver;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -32,6 +33,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Resources;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
@@ -85,6 +87,8 @@ import com.android.systemui.statusbar.NotificationData;
 import com.android.systemui.statusbar.StatusBar;
 import com.android.systemui.statusbar.StatusBarIconView;
 import com.android.systemui.statusbar.SignalClusterView;
+import com.android.systemui.statusbar.policy.CenterClock;
+import com.android.systemui.statusbar.policy.Clock;
 import com.android.systemui.statusbar.policy.DateView;
 import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.LocationController;
@@ -225,6 +229,7 @@ public class PhoneStatusBar extends StatusBar {
     int[] mAbsPos = new int[2];
     Runnable mPostCollapseCleanup = null;
 
+    LinearLayout mCenterClockLayout;
 
     // for disabling the status bar
     int mDisabled = 0;
@@ -307,11 +312,16 @@ public class PhoneStatusBar extends StatusBar {
                     (NavigationBarView) View.inflate(context, R.layout.navigation_bar, null);
 
                 mNavigationBarView.setDisabledFlags(mDisabled);
+                NavPanelObserver settingsObserver = new NavPanelObserver(new Handler());
+                settingsObserver.observe();
             }
         } catch (RemoteException ex) {
             // no window manager? good luck with that
         }
-
+    
+        
+        NavPanelObserver settingsObserver = new NavPanelObserver(new Handler());
+        settingsObserver.observe();
         // figure out which pixel-format to use for the status bar.
         mPixelFormat = PixelFormat.OPAQUE;
         mStatusIcons = (LinearLayout)sb.findViewById(R.id.statusIcons);
@@ -319,6 +329,7 @@ public class PhoneStatusBar extends StatusBar {
         mMoreIcon = sb.findViewById(R.id.moreIcon);
         mNotificationIcons.setOverflowIndicator(mMoreIcon);
         mIcons = (LinearLayout)sb.findViewById(R.id.icons);
+        mCenterClockLayout = (LinearLayout) sb.findViewById(R.id.center_clock_layout);
         mTickerView = sb.findViewById(R.id.ticker);
 
         mExpandedDialog = new ExpandedDialog(context);
@@ -348,6 +359,10 @@ public class PhoneStatusBar extends StatusBar {
                         }
                     }
                 });
+<<<<<<< HEAD
+=======
+
+>>>>>>> a653394989b691362658984f62af44943a1eba05
         mPowerWidget.setGlobalButtonOnLongClickListener(new View.OnLongClickListener() {
             public boolean onLongClick(View v) {
                 animateCollapse();
@@ -355,6 +370,10 @@ public class PhoneStatusBar extends StatusBar {
             }
         });
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> a653394989b691362658984f62af44943a1eba05
         mTicker = new MyTicker(context, sb);
 
         TickerView tickerView = (TickerView)sb.findViewById(R.id.tickerText);
@@ -398,6 +417,25 @@ public class PhoneStatusBar extends StatusBar {
 	mPowerWidget.setupWidget();
 
         return sb;
+    }
+
+    protected class NavPanelObserver extends ContentObserver {
+        public NavPanelObserver(Handler handler) {
+            super(handler);
+        }
+
+        public void observe() {
+            ContentResolver resolver = mContext.getContentResolver();
+            resolver.registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.NAV_BUTTONS),
+                            false, this);
+            onChange(true);
+        }
+
+        @Override
+        public void onChange(boolean selfChange) {
+            prepareNavigationBarView();
+        }
     }
 
     protected WindowManager.LayoutParams getRecentsLayoutParams(LayoutParams layoutParams) {
@@ -1059,9 +1097,15 @@ public class PhoneStatusBar extends StatusBar {
     }
 
     public void showClock(boolean show) {
-        View clock = mStatusBarView.findViewById(R.id.clock);
+
+        Clock clock = (Clock) mStatusBarView.findViewById(R.id.clock);
         if (clock != null) {
-            clock.setVisibility(show ? View.VISIBLE : View.GONE);
+            clock.updateVisibilityFromStatusBar(show);
+        }
+        
+        CenterClock cclock = (CenterClock) mStatusBarView.findViewById(R.id.center_clock);
+        if (cclock != null) {
+            cclock.updateVisibilityFromStatusBar(show);
         }
     }
 
@@ -1720,24 +1764,30 @@ public class PhoneStatusBar extends StatusBar {
         public void tickerStarting() {
             mTicking = true;
             mIcons.setVisibility(View.GONE);
+            mCenterClockLayout.setVisibility(View.GONE);
             mTickerView.setVisibility(View.VISIBLE);
             mTickerView.startAnimation(loadAnim(com.android.internal.R.anim.push_up_in, null));
             mIcons.startAnimation(loadAnim(com.android.internal.R.anim.push_up_out, null));
+            mCenterClockLayout.startAnimation(loadAnim(com.android.internal.R.anim.push_up_out, null));
         }
 
         @Override
         public void tickerDone() {
             mIcons.setVisibility(View.VISIBLE);
+            mCenterClockLayout.setVisibility(View.VISIBLE);
             mTickerView.setVisibility(View.GONE);
             mIcons.startAnimation(loadAnim(com.android.internal.R.anim.push_down_in, null));
+            mCenterClockLayout.startAnimation(loadAnim(com.android.internal.R.anim.push_down_in, null));            
             mTickerView.startAnimation(loadAnim(com.android.internal.R.anim.push_down_out,
                         mTickingDoneListener));
         }
 
         public void tickerHalting() {
             mIcons.setVisibility(View.VISIBLE);
+            mCenterClockLayout.setVisibility(View.VISIBLE);
             mTickerView.setVisibility(View.GONE);
             mIcons.startAnimation(loadAnim(com.android.internal.R.anim.fade_in, null));
+            mCenterClockLayout.startAnimation(loadAnim(com.android.internal.R.anim.fade_in, null));
             mTickerView.startAnimation(loadAnim(com.android.internal.R.anim.fade_out,
                         mTickingDoneListener));
         }

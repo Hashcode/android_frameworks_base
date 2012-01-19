@@ -750,7 +750,11 @@ public final class ContactsContract {
         public static final String SYNC3 = "sync3";
         /** Generic column for use by sync adapters. */
         public static final String SYNC4 = "sync4";
+<<<<<<< HEAD
         /** Facebook contacts */
+=======
+         /** Facebook sync */
+>>>>>>> a653394989b691362658984f62af44943a1eba05
         public static final String IS_RESTRICTED = "is_restricted";
     }
 

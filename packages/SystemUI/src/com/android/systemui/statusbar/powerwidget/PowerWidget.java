@@ -201,7 +201,11 @@ public class PowerWidget extends FrameLayout {
     private void updateVisibility() {
         // now check if we need to display the widget still
         boolean displayPowerWidget = Settings.System.getInt(mContext.getContentResolver(),
+<<<<<<< HEAD
                    Settings.System.EXPANDED_VIEW_WIDGET, 1) == 1;
+=======
+                   Settings.System.EXPANDED_VIEW_WIDGET, 0) == 1;
+>>>>>>> a653394989b691362658984f62af44943a1eba05
         if(!displayPowerWidget) {
             setVisibility(View.GONE);
         } else {
@@ -265,7 +269,11 @@ public class PowerWidget extends FrameLayout {
             resolver.registerContentObserver(
                     Settings.System.getUriFor(Settings.System.EXPANDED_VIEW_WIDGET_COLOR),
                             false, this);
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> a653394989b691362658984f62af44943a1eba05
             // watch for changes in indicator visibility
             resolver.registerContentObserver(
                     Settings.System.getUriFor(Settings.System.EXPANDED_HIDE_INDICATOR),

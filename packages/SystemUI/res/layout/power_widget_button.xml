@@ -23,7 +23,11 @@
         android:orientation="vertical"
         android:clickable="true"
         android:focusable="true"
+<<<<<<< HEAD
         android:background="@drawable/stat_power_background">
+=======
+        android:background="@drawable/powerwidget_bg">
+>>>>>>> a653394989b691362658984f62af44943a1eba05
     <ImageView android:id="@+id/power_widget_button_image"
            android:layout_width="match_parent"
             android:layout_height="0dip"

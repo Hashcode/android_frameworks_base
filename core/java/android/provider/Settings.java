@@ -589,6 +589,22 @@ public final class Settings {
     @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_NFCSHARING_SETTINGS =
         "android.settings.NFCSHARING_SETTINGS";
+    
+    /**
+     * Activity Action: Show Anderson settings.
+     * <p>
+     * In some cases, a matching Activity may not exist, so ensure you
+     * safeguard against this.
+     * <p>
+     * Input: Nothing.
+     * <p>
+     * Output: Nothing
+     * 
+     * @hide
+     */
+    @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
+    public static final String ACTION_ANDERSON_SETTINGS =
+        "android.settings.ANDERSON_SETTINGS";
 
     // End of Intent actions for Settings
 
@@ -1805,6 +1821,19 @@ public final class Settings {
         public static final String ACCELEROMETER_ROTATION = "accelerometer_rotation";
 
         /**
+         * Control the type of rotation which can be performed using the accelerometer
+         * if ACCELEROMETER_ROTATION is enabled.
+         * Value is a bitwise combination of
+         * 1 = 0 degrees (portrait)
+         * 2 = 90 degrees (left)
+         * 4 = 180 degrees (inverted portrait)
+         * 8 = 270 degrees (right)
+         * Setting to 0 is effectively orientation lock
+         * @hide
+         */
+        public static final String ACCELEROMETER_ROTATION_ANGLES = "accelerometer_rotation_angles";
+
+        /**
          * Default screen rotation when no other policy applies.
          * When {@link #ACCELEROMETER_ROTATION} is zero and no on-screen Activity expresses a
          * preference, this rotation value will be used. Must be one of the
@@ -2025,6 +2054,294 @@ public final class Settings {
          * @hide
          */
         public static final String POINTER_SPEED = "pointer_speed";
+        
+        /**
+         * Pulse light color setting.
+         * This is an int value which represents the color of the pulse light
+         * 
+         * @hide
+         */
+        public static final String NOTIFICATION_PULSE_COLOR = "notification_pulse_color";
+        
+        /**
+         * Pulse light color fallback setting.
+         * This is an int value which represents the color of the pulse light if no setting is found
+         * 
+         * @hide
+         */
+        public static final int NOTIFICATION_PULSE_COLOR_FALLBACK = -1;  // fallback to white if no other color set
+
+        /**
+         * Use the Notification Power Widget? (Who wouldn't!)
+         *
+         * @hide
+         */
+        public static final String EXPANDED_VIEW_WIDGET = "expanded_view_widget";
+
+        /**
+         * Whether to hide the notification screen after clicking on a widget
+         * button
+         *
+         * @hide
+         */
+        public static final String EXPANDED_HIDE_ONCHANGE = "expanded_hide_onchange";
+
+        /**
+         * Hide scroll bar in power widget
+         *
+         * @hide
+         */
+        public static final String EXPANDED_HIDE_SCROLLBAR = "expanded_hide_scrollbar";
+
+        /**
+         * Hide indicator in status bar widget
+         *
+         * @hide
+         */
+        public static final String EXPANDED_HIDE_INDICATOR = "expanded_hide_indicator";
+
+        /**
+         * Haptic feedback in power widget
+         *
+         * @hide
+         */
+        public static final String EXPANDED_HAPTIC_FEEDBACK = "expanded_haptic_feedback";
+
+        /**
+         * Notification Indicator Color
+         *
+         * @hide
+         */
+        public static final String EXPANDED_VIEW_WIDGET_COLOR = "expanded_widget_color";
+
+        /**
+         * Widget Buttons to Use
+         *
+         * @hide
+         */
+        public static final String WIDGET_BUTTONS = "expanded_widget_buttons";
+
+        /**
+         * Navigation controls to Use
+         *
+         * @hide
+         */
+        public static final String NAV_BUTTONS = "nav_buttons";
+
+        /**
+        * Notification Power Widget - Custom Brightness Mode
+        * @hide
+        */
+        public static final String EXPANDED_BRIGHTNESS_MODE = "expanded_brightness_mode";
+
+        /**
+        * Notification Power Widget - Custom Network Mode
+        * @hide
+        */
+        public static final String EXPANDED_NETWORK_MODE = "expanded_network_mode";
+
+        /**
+         * Notification Power Widget - Custom LTE Toggle
+         * 1 - lte on, 0 - lte off
+         * @hide
+         */
+         public static final String LTE_MODE = "lte_mode";
+
+        /**
+        * Notification Power Widget - Custom Screen Timeout
+        * @hide
+        */
+        public static final String EXPANDED_SCREENTIMEOUT_MODE = "expanded_screentimeout_mode";
+
+        /**
+        * Notification Power Widget - Custom Ring Mode
+        * @hide
+        */
+        public static final String EXPANDED_RING_MODE = "expanded_ring_mode";
+
+        /**
+        * Notification Power Widget - Custom Torch Mode
+        * @hide
+        */
+        public static final String EXPANDED_FLASH_MODE = "expanded_flash_mode";
+
+        /**
+         * Setting to hide the statusbar alarm clock notification
+         * @hide
+         */
+        public static final String STATUSBAR_SHOW_ALARM = "statusbar_show_alarm";
+ 
+        /**
+         * Status bar battery percentage text.
+         * @hide
+         */
+        public static final String STATUSBAR_BATTERY_TEXT = "statusbar_battery_text";
+        
+        /**
+         * Status bar battery percentage text style.
+         * @hide
+         */
+        public static final String STATUSBAR_BATTERY_TEXT_STYLE = "statusbar_battery_text_style";
+
+        /**	
+         * Pulse light duration setting.	
+         * This is an int value which represents the milliseconds the pulse should flash	
+         * 	
+         * @hide	
+         */	
+        public static final String NOTIFICATION_PULSE_DURATION = "notification_pulse_duration";	
+        	
+        /**
+         * Pulse light duration fallback setting.	
+         * This is an int value which represents the milliseconds the pulse should flash
+         * 	
+         * @hide	
+         */	
+        public static final int NOTIFICATION_PULSE_DURATION_FALLBACK = 500;  // fallback to 500ms	
+        
+        /**	
+         * Pulse light frequency setting.
+         * This is an int value which represents the milliseconds between pulses	
+         * 	
+         * @hide
+         */	
+        public static final String NOTIFICATION_PULSE_FREQUENCY = "notification_pulse_frequency";	
+        
+        /**
+         * Pulse light duration fallback setting.
+         * This is an int value which represents the milliseconds between pulses
+         * 
+         * @hide
+         */
+        public static final int NOTIFICATION_PULSE_FREQUENCY_FALLBACK = 7000;  // fallback to 7000ms
+        
+        /**
+         * Setting for using battery percentage drawables
+         * @hide
+         */
+        public static final String BATTERY_PERCENTAGES = "battery_percentages";
+        
+        /**
+         * Setting to always show the menu button in navigation bar
+         * @hide
+         */
+        public static final String PERSIST_MENU = "persist_menu";
+
+        /**
+         * Setting for AM/PM statusbar clock style
+         * 
+         * @hide
+         */
+        public static final String STATUSBAR_CLOCK_AM_PM_STYLE = "statusbar_clock_am_pm_style";
+
+        /**
+         * Setting for statusbar clock layout (right and center)
+         * 
+         * @hide
+         */
+        public static final String STATUSBAR_CLOCK_STYLE = "statusbar_clock_enabled";
+
+        /**
+         * Setting for custom statusbar clock colors
+         * 
+         * @hide
+         */
+        public static final String STATUSBAR_CLOCK_COLOR = "statusbar_clock_color";
+
+        /**
+         * Setting for statusbar clock layout (hide)
+         * 
+         * @hide
+         */
+        public static final String STATUSBAR_CLOCK_LOCKSCREEN_HIDE = "statusbar_clock_lockscreen_hide";
+
+        /**
+         * Setting to enable/disable menu unlock on the lockscreen
+         * 
+         * @hide
+         */
+        public static final String LOCKSCREEN_ENABLE_MENU_KEY = "lockscreen_enable_menu_key";
+
+        /**
+         *
+         * 0 = stock 1 = six 2 = eight 3 = eight unhidden
+         * @hide
+         */
+        public static final String LOCKSCREEN_LAYOUT = "lockscreen_layout";
+
+        /**
+         * Setting for custom nav bar tint
+         * 
+         * @hide
+         */
+        public static final String NAVIGATION_BAR_TINT = "navigation_bar_tint";
+
+        /**
+         * Setting to switch the camera on the lockscreen out for the sound toggle
+         * 
+         * @hide
+         */
+        public static final String LOCKSCREEN_DISABLE_CAMERA = "lockscreen_disable_camera";
+
+        /**
+         * whether volume keys wake the screen. boolean value
+         * 
+         * @hide
+         */
+        public static final String VOLUME_WAKE_SCREEN = "volume_wake_screen";
+        
+        /**
+         * launch a custom app for sms
+         * 
+         * @hide
+         */
+        public static final String LOCKSCREEN_CUSTOM_SMS_INTENT = "lockscreen_custom_sms_intent";
+        
+        /**
+         * launch a custom app for upper right target
+         * 
+         * @hide
+         */
+        public static final String LOCKSCREEN_CUSTOM_UPPER_RIGHT_INTENT = "lockscreen_custom_upper_right_intent";
+        
+        /**
+         * launch a custom app for upper left target
+         * 
+         * @hide
+         */
+        public static final String LOCKSCREEN_CUSTOM_UPPER_LEFT_INTENT = "lockscreen_custom_upper_left_intent";
+        
+        /**
+         * launch a custom app for lower right target
+         * 
+         * @hide
+         */
+        public static final String LOCKSCREEN_CUSTOM_LOWER_RIGHT_INTENT = "lockscreen_custom_lower_right_intent";
+        
+        /**
+         * launch a custom app for lower left target
+         * 
+         * @hide
+         */
+        public static final String LOCKSCREEN_CUSTOM_LOWER_LEFT_INTENT = "lockscreen_custom_lower_left_intent";
+        
+        /**
+         * Whether volume up/down can be long pressed to skip tracks
+         * @hide
+         */
+        public static final String VOLUME_MUSIC_CONTROLS = "volume_music_controls";
+
+        /**
+         * Whether to show the battery bar
+         * 
+         * @hide
+         */
+        public static final String STATUSBAR_BATTERY_BAR = "statusbar_battery_bar";
+
+        /**
+         * @hide
+         */
+        public static final String STATUSBAR_BATTERY_BAR_COLOR = "statusbar_battery_bar_color";
 
         /**
          * GLOBAL_PHONE_SIM_ABSENT_TAG setting
@@ -2184,6 +2501,7 @@ public final class Settings {
             SIP_CALL_OPTIONS,
             SIP_RECEIVE_CALLS,
             POINTER_SPEED,
+            NOTIFICATION_PULSE_COLOR,
         };
 
         // Settings moved to Settings.Secure
@@ -2415,6 +2733,12 @@ public final class Settings {
         @Deprecated
         public static final String WIFI_WATCHDOG_PING_TIMEOUT_MS =
             Secure.WIFI_WATCHDOG_PING_TIMEOUT_MS;
+
+        public static final String CRT_OFF_ANIMATION = "crt_off_animation";
+
+        public static final String CRT_ON_ANIMATION = "crt_on_animation";
+        
+        public static final String CUSTOM_CARRIER_LABEL = "custom_carrier_label";
     }
 
     /**
@@ -2685,10 +3009,16 @@ public final class Settings {
         public static final String ADB_ENABLED = "adb_enabled";
 
         /**
+<<<<<<< HEAD
          * The TCP/IP port to run ADB on, or -1 for USB
          * @hide
          */
         public static final String ADB_PORT = "adb_port";
+=======
+         * Whether to display the ADB notification.
+         */
+        public static final String ADB_NOTIFY = "adb_notify";
+>>>>>>> a653394989b691362658984f62af44943a1eba05
 
         /**
          * Setting to allow mock locations and location provider status to be injected into the
@@ -4275,6 +4605,28 @@ public final class Settings {
          */
         public static final String SETUP_PREPAID_DETECTION_REDIR_HOST =
                 "setup_prepaid_detection_redir_host";
+
+        /**
+         * Whether the screensaver is enabled.
+         * @hide
+         */
+        public static final String SCREENSAVER_ENABLED = "screensaver_enabled";
+
+        /**
+         * The user's chosen screensaver component.
+         *
+         * This component will be launched by the PhoneWindowManager after a timeout when not on
+         * battery, or upon dock insertion (if SCREENSAVER_ACTIVATE_ON_DOCK is set to 1).
+         * @hide
+         */
+        public static final String SCREENSAVER_COMPONENT = "screensaver_component";
+
+        /**
+         * Whether the screensaver should be automatically launched when the device is inserted
+         * into a (desk) dock.
+         * @hide
+         */
+        public static final String SCREENSAVER_ACTIVATE_ON_DOCK = "screensaver_activate_on_dock";
 
         /** {@hide} */
         public static final String NETSTATS_ENABLED = "netstats_enabled";
