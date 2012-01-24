@@ -19,22 +19,22 @@
 //#define LOG_NDEBUG 0
 
 // Log debug messages for each raw event received from the EventHub.
-//#define DEBUG_RAW_EVENTS 0
+#define DEBUG_RAW_EVENTS 0
 
 // Log debug messages about touch screen filtering hacks.
-//#define DEBUG_HACKS 0
+#define DEBUG_HACKS 0
 
 // Log debug messages about virtual key processing.
-//#define DEBUG_VIRTUAL_KEYS 0
+#define DEBUG_VIRTUAL_KEYS 0
 
 // Log debug messages about pointers.
-//#define DEBUG_POINTERS 0
+#define DEBUG_POINTERS 0
 
 // Log debug messages about pointer assignment calculations.
-//#define DEBUG_POINTER_ASSIGNMENT 0
+#define DEBUG_POINTER_ASSIGNMENT 0
 
 // Log debug messages about gesture detection.
-//#define DEBUG_GESTURES 0
+#define DEBUG_GESTURES 0
 
 #include "InputReader.h"
 
@@ -645,7 +645,7 @@ int32_t InputReader::getStateLocked(int32_t deviceId, uint32_t sourceMask, int32
             InputDevice* device = mDevices.valueAt(i);
             if (! device->isIgnored() && sourcesMatchMask(device->getSources(), sourceMask)) {
                 result = (device->*getStateFunc)(sourceMask, code);
-                if (result >= AKEY_STATE_UP) {
+                if (result >= AKEY_STATE_DOWN) {
                     return result;
                 }
             }
@@ -931,9 +931,6 @@ void InputDevice::process(const RawEvent* rawEvents, size_t count) {
     // have side-effects that must be interleaved.  For example, joystick movement events and
     // gamepad button presses are handled by different mappers but they should be dispatched
     // in the order received.
-#ifdef LEGACY_TOUCHSCREEN
-    static int32_t touched, z_data;
-#endif
     size_t numMappers = mMappers.size();
     for (const RawEvent* rawEvent = rawEvents; count--; rawEvent++) {
 #if DEBUG_RAW_EVENTS
@@ -959,66 +956,9 @@ void InputDevice::process(const RawEvent* rawEvents, size_t count) {
             mDropUntilNextSync = true;
             reset(rawEvent->when);
         } else {
-
-            if (!numMappers) continue;
-            InputMapper* mapper = NULL;
-
-#ifdef LEGACY_TOUCHSCREEN
-
-            // Old touchscreen sensors need to send a fake BTN_TOUCH (BTN_LEFT)
-
-            if (rawEvent->scanCode == ABS_MT_TOUCH_MAJOR && rawEvent->type == EV_ABS) {
-
-                z_data = rawEvent->value;
-                touched = (0 != z_data);
-            }
-            else if (rawEvent->scanCode == ABS_MT_POSITION_Y) {
-
-                RawEvent event;
-                memset(&event, 0, sizeof(event));
-                event.when = rawEvent->when;
-                event.deviceId = rawEvent->deviceId;
-                event.scanCode = rawEvent->scanCode;
-
-                event.type = rawEvent->type;
-                event.value = rawEvent->value;
-                for (size_t i = 0; i < numMappers; i++) {
-                    mapper = mMappers[i];
-                    mapper->process(&event);
-                }
-
-                /* Pressure on contact area from ABS_MT_TOUCH_MAJOR */
-                event.type = rawEvent->type;
-                event.scanCode = ABS_MT_PRESSURE;
-                event.value = z_data;
-                for (size_t i = 0; i < numMappers; i++) {
-                    mapper = mMappers[i];
-                    mapper->process(&event);
-                }
-
-                event.type = EV_KEY;
-                event.scanCode = BTN_TOUCH;
-                event.keyCode = BTN_LEFT;
-                event.value = touched;
-                for (size_t i = 0; i < numMappers; i++) {
-                    mapper = mMappers[i];
-                    mapper->process(&event);
-                }
-
-#if DEBUG_RAW_EVENTS
-                LOGD("Fake event sent, touch=%d :: Input event: device=%d type=0x%04x scancode=0x%04x "
-                "keycode=0x%04x value=0x%08x flags=0x%08x!", touched, rawEvent->deviceId, rawEvent->type, rawEvent->scanCode, rawEvent->keyCode,
-                rawEvent->value, rawEvent->flags);
-#endif
-            }
-            else
-#endif //LEGACY_TOUCHSCREEN
-            {
-                // just send the rawEvent
-                for (size_t i = 0; i < numMappers; i++) {
-                     mapper = mMappers[i];
-                     mapper->process(rawEvent);
-                }
+            for (size_t i = 0; i < numMappers; i++) {
+                InputMapper* mapper = mMappers[i];
+                mapper->process(rawEvent);
             }
         }
     }
@@ -1061,7 +1001,7 @@ int32_t InputDevice::getState(uint32_t sourceMask, int32_t code, GetStateFunc ge
         InputMapper* mapper = mMappers[i];
         if (sourcesMatchMask(mapper->getSources(), sourceMask)) {
             result = (mapper->*getStateFunc)(sourceMask, code);
-            if (result >= AKEY_STATE_UP) {
+            if (result >= AKEY_STATE_DOWN) {
                 return result;
             }
         }
@@ -1350,6 +1290,12 @@ void TouchButtonAccumulator::process(const RawEvent* rawEvent) {
             break;
         }
     }
+#ifdef LEGACY_TOUCHSCREEN
+    // set true to mBtnTouch by multi-touch event with pressure more than zero
+    // some touchscreen driver which has BTN_TOUCH feature doesn't send BTN_TOUCH event
+    else if (rawEvent->type == EV_ABS && rawEvent->scanCode == ABS_MT_TOUCH_MAJOR && rawEvent->value > 0)
+        mBtnTouch = true;
+#endif
 }
 
 uint32_t TouchButtonAccumulator::getButtonState() const {
@@ -1625,7 +1571,12 @@ void MultiTouchMotionAccumulator::process(const RawEvent* rawEvent) {
                 break;
             case ABS_MT_TOUCH_MAJOR:
                 slot->mInUse = true;
+#ifdef LEGACY_TOUCHSCREEN
+                // emulate ABS_MT_PRESSURE
+                slot->mAbsMTPressure = rawEvent->value;
+#else
                 slot->mAbsMTTouchMajor = rawEvent->value;
+#endif
                 break;
             case ABS_MT_TOUCH_MINOR:
                 slot->mInUse = true;
@@ -1634,7 +1585,12 @@ void MultiTouchMotionAccumulator::process(const RawEvent* rawEvent) {
                 break;
             case ABS_MT_WIDTH_MAJOR:
                 slot->mInUse = true;
+#ifdef LEGACY_TOUCHSCREEN
+                // emulate ABS_MT_TOUCH_MAJOR
+                slot->mAbsMTTouchMajor = rawEvent->value;
+#else
                 slot->mAbsMTWidthMajor = rawEvent->value;
+#endif
                 break;
             case ABS_MT_WIDTH_MINOR:
                 slot->mInUse = true;
@@ -1671,6 +1627,12 @@ void MultiTouchMotionAccumulator::process(const RawEvent* rawEvent) {
             }
         }
     } else if (rawEvent->type == EV_SYN && rawEvent->scanCode == SYN_MT_REPORT) {
+#ifdef LEGACY_TOUCHSCREEN
+        // don't use the slot with pressure less than or qeual to zero
+        // some touchscreen driver sends multi-touch event for not-in-use pointer
+        if (mSlots[mCurrentSlot].mAbsMTPressure <= 0)
+            mSlots[mCurrentSlot].mInUse = false;
+#endif
         // MultiTouch Sync: The driver has returned all data for *one* of the pointers.
         mCurrentSlot += 1;
     }
@@ -1900,7 +1862,6 @@ void KeyboardInputMapper::reset(nsecs_t when) {
 }
 
 void KeyboardInputMapper::process(const RawEvent* rawEvent) {
-    // LOGE("process(), type=%d, keyCode=%d, scanCode=%d, flags=0x%08x", rawEvent->type, rawEvent->keyCode, rawEvent->scanCode, rawEvent->flags);
     switch (rawEvent->type) {
     case EV_KEY: {
         int32_t scanCode = rawEvent->scanCode;
@@ -5731,12 +5692,20 @@ void MultiTouchInputMapper::configureRawPointerAxes() {
 
     getAbsoluteAxisInfo(ABS_MT_POSITION_X, &mRawPointerAxes.x);
     getAbsoluteAxisInfo(ABS_MT_POSITION_Y, &mRawPointerAxes.y);
+#ifdef LEGACY_TOUCHSCREEN
+    getAbsoluteAxisInfo(ABS_MT_WIDTH_MAJOR, &mRawPointerAxes.touchMajor);
+#else
     getAbsoluteAxisInfo(ABS_MT_TOUCH_MAJOR, &mRawPointerAxes.touchMajor);
+#endif
     getAbsoluteAxisInfo(ABS_MT_TOUCH_MINOR, &mRawPointerAxes.touchMinor);
     getAbsoluteAxisInfo(ABS_MT_WIDTH_MAJOR, &mRawPointerAxes.toolMajor);
     getAbsoluteAxisInfo(ABS_MT_WIDTH_MINOR, &mRawPointerAxes.toolMinor);
     getAbsoluteAxisInfo(ABS_MT_ORIENTATION, &mRawPointerAxes.orientation);
+#ifdef LEGACY_TOUCHSCREEN
+    getAbsoluteAxisInfo(ABS_MT_TOUCH_MAJOR, &mRawPointerAxes.pressure);
+#else
     getAbsoluteAxisInfo(ABS_MT_PRESSURE, &mRawPointerAxes.pressure);
+#endif
     getAbsoluteAxisInfo(ABS_MT_DISTANCE, &mRawPointerAxes.distance);
     getAbsoluteAxisInfo(ABS_MT_TRACKING_ID, &mRawPointerAxes.trackingId);
     getAbsoluteAxisInfo(ABS_MT_SLOT, &mRawPointerAxes.slot);
@@ -6104,3 +6073,4 @@ bool JoystickInputMapper::hasMovedNearerToValueWithinFilteredRange(
 }
 
 } // namespace android
+
