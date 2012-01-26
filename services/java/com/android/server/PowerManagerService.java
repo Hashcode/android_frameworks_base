@@ -146,7 +146,7 @@ public class PowerManagerService extends IPowerManager.Stub
     // used for noChangeLights in setPowerState()
     private static final int LIGHTS_MASK        = SCREEN_BRIGHT_BIT | BUTTON_BRIGHT_BIT | KEYBOARD_BRIGHT_BIT;
 
-    boolean mAnimateScreenLights = true;
+    boolean mAnimateScreenLights = false;
 
     static final int ANIM_STEPS = 60/4;
     // Slower animation for autobrightness changes
@@ -255,6 +255,8 @@ public class PowerManagerService extends IPowerManager.Stub
     private int mWarningSpewThrottleCount;
     private long mWarningSpewThrottleTime;
     private int mAnimationSetting = ANIM_SETTING_OFF;
+    private boolean mAnimateCrtOff = false;
+    private boolean mAnimateCrtOn = false;
 
     // Must match with the ISurfaceComposer constants in C++.
     private static final int ANIM_SETTING_ON = 0x01;
@@ -500,16 +502,23 @@ public class PowerManagerService extends IPowerManager.Stub
                 // recalculate everything
                 setScreenOffTimeoutsLocked();
 
-                final float windowScale = getFloat(WINDOW_ANIMATION_SCALE, 1.0f);
-                final float transitionScale = getFloat(TRANSITION_ANIMATION_SCALE, 1.0f);
+                // final float windowScale = getFloat(WINDOW_ANIMATION_SCALE, 1.0f);
+                // final float transitionScale = getFloat(TRANSITION_ANIMATION_SCALE, 1.0f);
                 mAnimationSetting = 0;
-                if (windowScale > 0.5f) {
+                mAnimateCrtOn = getInt(Settings.System.CRT_ON_ANIMATION, 0) == 1;
+                mAnimateCrtOff = getInt(Settings.System.CRT_OFF_ANIMATION, 1) == 1;
+                if (mAnimateCrtOff)
                     mAnimationSetting |= ANIM_SETTING_OFF;
+                if (mAnimateCrtOn) {
+                    mAnimationSetting |= ANIM_SETTING_ON;
                 }
-                if (transitionScale > 0.5f) {
-                    // Uncomment this if you want the screen-on animation.
-                    // mAnimationSetting |= ANIM_SETTING_ON;
-                }
+                // if (windowScale > 0.5f) {
+                // mAnimationSetting |= ANIM_SETTING_OFF;
+                // }
+                // if (transitionScale > 0.5f) {
+                // Uncomment this if you want the screen-on animation.
+                // mAnimationSetting |= ANIM_SETTING_ON;
+                // }
             }
         }
     }
@@ -658,10 +667,20 @@ public class PowerManagerService extends IPowerManager.Stub
                         + Settings.System.NAME + "=?) or ("
                         + Settings.System.NAME + "=?) or ("
                         + Settings.System.NAME + "=?) or ("
+<<<<<<< HEAD
                         + Settings.System.NAME + "=?)",
                 new String[]{STAY_ON_WHILE_PLUGGED_IN, SCREEN_OFF_TIMEOUT, DIM_SCREEN,
                         SCREEN_BRIGHTNESS_MODE, WINDOW_ANIMATION_SCALE, TRANSITION_ANIMATION_SCALE,
                         Settings.System.LIGHTS_CHANGED},
+=======
+                        + Settings.System.NAME + "=?) or ("
+                        + Settings.System.NAME + "=?) or ("
+                        + Settings.System.NAME + "=?)",
+                new String[] {
+                        STAY_ON_WHILE_PLUGGED_IN, SCREEN_OFF_TIMEOUT, DIM_SCREEN,
+                        SCREEN_BRIGHTNESS_MODE, WINDOW_ANIMATION_SCALE, TRANSITION_ANIMATION_SCALE,
+                        Settings.System.CRT_OFF_ANIMATION, Settings.System.CRT_ON_ANIMATION},
+>>>>>>> a653394989b691362658984f62af44943a1eba05
                 null);
         mSettings = new ContentQueryMap(settingsCursor, Settings.System.NAME, true, mHandler);
         SettingsObserver settingsObserver = new SettingsObserver();
@@ -2258,19 +2277,23 @@ public class PowerManagerService extends IPowerManager.Stub
             synchronized (mLocks) {
                 // we're turning off
                 final boolean turningOff = animating && targetValue == Power.BRIGHTNESS_OFF;
-                if (mAnimateScreenLights || !turningOff) {
+                final boolean crtAnimate = animating &&
+                ((mAnimateCrtOff && targetValue == Power.BRIGHTNESS_OFF) ||
+                 (mAnimateCrtOn && (int) curValue == Power.BRIGHTNESS_OFF));
+                
+                if (!crtAnimate && (mAnimateScreenLights || !turningOff)) {
                     long now = SystemClock.uptimeMillis();
                     boolean more = mScreenBrightness.stepLocked();
                     if (more) {
                         mScreenOffHandler.postAtTime(this, now+(1000/60));
                     }
                 } else {
+                    Slog.i(TAG, "animating: " + mAnimationSetting);
                     // It's pretty scary to hold mLocks for this long, and we should
                     // redesign this, but it works for now.
-                    nativeStartSurfaceFlingerAnimation(
-                            mScreenOffReason == WindowManagerPolicy.OFF_BECAUSE_OF_PROX_SENSOR
-                            ? 0 : mAnimationSetting);
-                    mScreenBrightness.jumpToTargetLocked();
+                    nativeStartSurfaceFlingerAnimation(mScreenOffReason == WindowManagerPolicy.OFF_BECAUSE_OF_PROX_SENSOR
+                                                       ? 0 : mAnimationSetting);
+                    mScreenBrightness.jumpToTargetLocked(); 
                 }
             }
         }
@@ -2699,7 +2722,16 @@ public class PowerManagerService extends IPowerManager.Stub
         if (mLightSensorValue != value) {
             mLightSensorValue = value;
             if ((mPowerState & BATTERY_LOW_BIT) == 0) {
+<<<<<<< HEAD
                 int lcdValue = getAutoBrightnessValue(value, mLastLcdValue,
+=======
+                // use maximum light sensor value seen since screen went on for LCD to avoid flicker
+                // we only do this if we are docked, since lighting should be stable when
+                // stationary in a dock.
+                int lcdValue = getAutoBrightnessValue(
+                        (!mIsDocked ? value : mHighestLightSensorValue),
+                        mLastLcdValue,
+>>>>>>> a653394989b691362658984f62af44943a1eba05
                         (mCustomLightEnabled ? mCustomLightLevels : mAutoBrightnessLevels),
                         (mCustomLightEnabled ? mCustomLcdValues : mLcdBacklightValues));
 

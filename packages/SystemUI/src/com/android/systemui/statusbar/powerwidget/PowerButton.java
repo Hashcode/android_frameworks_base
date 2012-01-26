@@ -51,6 +51,10 @@ public abstract class PowerButton {
     public static final String BUTTON_MEDIA_PREVIOUS = "toggleMediaPrevious";
     public static final String BUTTON_MEDIA_NEXT = "toggleMediaNext";
     public static final String BUTTON_WIMAX = "toggleWimax";
+<<<<<<< HEAD
+=======
+    public static final String BUTTON_LTE = "toggleLte";
+>>>>>>> a653394989b691362658984f62af44943a1eba05
     public static final String BUTTON_UNKNOWN = "unknown";
 
     private static final Mode MASK_MODE = Mode.SCREEN;
@@ -76,6 +80,10 @@ public abstract class PowerButton {
         BUTTONS.put(BUTTON_MEDIA_PLAY_PAUSE, MediaPlayPauseButton.class);
         BUTTONS.put(BUTTON_MEDIA_PREVIOUS, MediaPreviousButton.class);
         BUTTONS.put(BUTTON_MEDIA_NEXT, MediaNextButton.class);
+<<<<<<< HEAD
+=======
+        BUTTONS.put(BUTTON_LTE, LTEButton.class);
+>>>>>>> a653394989b691362658984f62af44943a1eba05
         /* BUTTONS.put(BUTTON_WIMAX, WimaxButton.class); */
     }
     // this is a list of our currently loaded buttons

@@ -168,6 +168,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     static final boolean ENABLE_CAR_DOCK_HOME_CAPTURE = true;
     static final boolean ENABLE_DESK_DOCK_HOME_CAPTURE = false;
 
+    // Should screen savers use their own timeout, or the SCREEN_OFF_TIMEOUT?
+    static final boolean SEPARATE_TIMEOUT_FOR_SCREEN_SAVER = false;
+
     static final int LONG_PRESS_POWER_NOTHING = 0;
     static final int LONG_PRESS_POWER_GLOBAL_ACTIONS = 1;
     static final int LONG_PRESS_POWER_SHUT_OFF = 2;
@@ -329,6 +332,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     int mUserRotationMode = WindowManagerPolicy.USER_ROTATION_FREE;
     int mUserRotation = Surface.ROTATION_0;
+    int mUserRotationAngles = -1;
 
     int mAllowAllRotations = -1;
     boolean mCarDockEnablesAccelerometer;
@@ -430,6 +434,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     int mLockScreenTimeout;
     boolean mLockScreenTimerActive;
 
+    // visual screen saver support
+    int mScreenSaverTimeout = 0;
+    boolean mScreenSaverEnabledByUser = false;
+    boolean mScreenSaverMayRun = true; // false if a wakelock is held
+    boolean mPluggedIn;
+
     // Behavior of ENDCALL Button.  (See Settings.System.END_BUTTON_BEHAVIOR.)
     int mEndcallBehavior;
 
@@ -454,6 +464,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private boolean mVolumeUpKeyTriggered;
     private boolean mPowerKeyTriggered;
     private long mPowerKeyTime;
+
+    private boolean mVolumeWakeScreen;
+    boolean mVolBtnMusicControls;
+    boolean mIsLongPress;
 
     ShortcutManager mShortcutManager;
     PowerManager.WakeLock mBroadcastWakeLock;
@@ -491,7 +505,19 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             resolver.registerContentObserver(Settings.Secure.getUriFor(
                     Settings.Secure.DEFAULT_INPUT_METHOD), false, this);
             resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.VOLUME_WAKE_SCREEN), false, this);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.VOLUME_MUSIC_CONTROLS), false, this);
+            resolver.registerContentObserver(Settings.System.getUriFor(
                     "fancy_rotation_anim"), false, this);
+            resolver.registerContentObserver(Settings.Secure.getUriFor(
+                    Settings.Secure.SCREENSAVER_ENABLED), false, this);
+            if (SEPARATE_TIMEOUT_FOR_SCREEN_SAVER) {
+                resolver.registerContentObserver(Settings.Secure.getUriFor(
+                        "screensaver_timeout"), false, this);
+            } // otherwise SCREEN_OFF_TIMEOUT will do nicely
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.ACCELEROMETER_ROTATION_ANGLES), false, this);
             updateSettings();
         }
 
@@ -612,6 +638,46 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (mPowerKeyTriggered) {
             mPendingPowerKeyUpCanceled = true;
         }
+    }
+    
+    /**
+     * When a volumeup-key longpress expires, skip songs based on key press
+     */
+    Runnable mVolumeUpLongPress = new Runnable() {
+        public void run() {
+            // set the long press flag to true
+            mIsLongPress = true;
+
+            // Shamelessly copied from Kmobs LockScreen controls, works for Pandora, etc...
+            sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_NEXT);
+        };
+    };
+
+    /**
+     * When a volumedown-key longpress expires, skip songs based on key press
+     */
+    Runnable mVolumeDownLongPress = new Runnable() {
+        public void run() {
+            // set the long press flag to true
+            mIsLongPress = true;
+
+            // Shamelessly copied from Kmobs LockScreen controls, works for Pandora, etc...
+            sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PREVIOUS);
+        };
+    };
+    
+    private void sendMediaButtonEvent(int code) {
+        long eventtime = SystemClock.uptimeMillis();
+
+        Intent downIntent = new Intent(Intent.ACTION_MEDIA_BUTTON, null);
+        KeyEvent downEvent = new KeyEvent(eventtime, eventtime, KeyEvent.ACTION_DOWN, code, 0);
+        downIntent.putExtra(Intent.EXTRA_KEY_EVENT, downEvent);
+        mContext.sendOrderedBroadcast(downIntent, null);
+
+        Intent upIntent = new Intent(Intent.ACTION_MEDIA_BUTTON, null);
+        KeyEvent upEvent = new KeyEvent(eventtime, eventtime, KeyEvent.ACTION_UP, code, 0);
+        upIntent.putExtra(Intent.EXTRA_KEY_EVENT, upEvent);
+        mContext.sendOrderedBroadcast(upIntent, null);
     }
 
     private void interceptScreenshotChord() {
@@ -848,6 +914,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     Intent.EXTRA_DOCK_STATE_UNDOCKED);
         }
 
+        // watch the plug to know whether to trigger the screen saver
+        filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+        intent = context.registerReceiver(mPowerReceiver, filter);
+        if (intent != null) {
+            mPluggedIn = (0 != intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0));
+        }
+
         mVibrator = new Vibrator();
         mLongPressVibePattern = getLongIntArray(mContext.getResources(),
                 com.android.internal.R.array.config_longPressVibePattern);
@@ -959,11 +1033,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mUserRotation = Settings.System.getInt(resolver,
                     Settings.System.USER_ROTATION,
                     Surface.ROTATION_0);
+            mUserRotationAngles = Settings.System.getInt(resolver,
+                    Settings.System.ACCELEROMETER_ROTATION_ANGLES, -1);
 
             if (mAccelerometerDefault != accelerometerDefault) {
                 mAccelerometerDefault = accelerometerDefault;
                 updateOrientationListenerLp();
             }
+
+            mVolumeWakeScreen = (Settings.System.getInt(resolver,
+                    Settings.System.VOLUME_WAKE_SCREEN, 0) == 1);
+            mVolBtnMusicControls = (Settings.System.getInt(resolver,
+                    Settings.System.VOLUME_MUSIC_CONTROLS, 0) == 1);
 
             mOrientationListener.setLogEnabled(
                     Settings.System.getInt(resolver,
@@ -996,6 +1077,23 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 mHasSoftInput = hasSoftInput;
                 updateRotation = true;
             }
+
+            mScreenSaverEnabledByUser = 0 != Settings.Secure.getInt(resolver,
+                    Settings.Secure.SCREENSAVER_ENABLED, 1);
+
+            if (SEPARATE_TIMEOUT_FOR_SCREEN_SAVER) {
+                mScreenSaverTimeout = Settings.Secure.getInt(resolver,
+                        "screensaver_timeout", 0);
+            } else {
+                mScreenSaverTimeout = Settings.System.getInt(resolver,
+                        Settings.System.SCREEN_OFF_TIMEOUT, 0);
+                if (mScreenSaverTimeout > 0) {
+                    // We actually want to activate the screensaver just before the
+                    // power manager's screen timeout
+                    mScreenSaverTimeout -= 5000;
+                }
+            }
+            updateScreenSaverTimeoutLocked();
         }
         if (updateRotation) {
             updateRotation(true);
@@ -2783,7 +2881,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             result = 0;
 
             final boolean isWakeKey = (policyFlags
-                    & (WindowManagerPolicy.FLAG_WAKE | WindowManagerPolicy.FLAG_WAKE_DROPPED)) != 0;
+                    & (WindowManagerPolicy.FLAG_WAKE | WindowManagerPolicy.FLAG_WAKE_DROPPED)) != 0 ||
+                             ((keyCode == KeyEvent.KEYCODE_VOLUME_UP) && mVolumeWakeScreen) ||
+                             ((keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) && mVolumeWakeScreen);
             if (down && isWakeKey) {
                 if (keyguardActive) {
                     // If the keyguard is showing, let it decide what to do with the wake key.
@@ -2801,6 +2901,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             case KeyEvent.KEYCODE_VOLUME_DOWN:
             case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_VOLUME_MUTE: {
+                if (mVolBtnMusicControls && !down) {
+                    handleVolumeLongPressAbort();
+
+                    // delay handling volume events if mVolBtnMusicControls is desired
+                    if (!mIsLongPress)
+                        handleVolumeKey(AudioManager.STREAM_MUSIC, keyCode);
+                }
                 if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
                     if (down) {
                         if (isScreenOn && !mVolumeDownKeyTriggered
@@ -2864,9 +2971,19 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     }
 
                     if (isMusicActive() && (result & ACTION_PASS_TO_USER) == 0) {
-                        // If music is playing but we decided not to pass the key to the
-                        // application, handle the volume change here.
-                        handleVolumeKey(AudioManager.STREAM_MUSIC, keyCode);
+                        // Care for long-press actions to skip tracks
+                        if (mVolBtnMusicControls) {
+                            // initialize long press flag to false for volume events
+                            mIsLongPress = false;
+
+                            // if the button is held long enough, the following
+                            // procedure will set mIsLongPress=true
+                            handleVolumeLongPress(keyCode);
+                        } else {
+                            // If music is playing but we decided not to pass the key to the
+                            // application, handle the volume change here.
+                            handleVolumeKey(AudioManager.STREAM_MUSIC, keyCode);
+                        }
                         break;
                     }
                 }
@@ -3024,6 +3141,22 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         return result;
     }
 
+    void handleVolumeLongPress(int keycode) {
+        Runnable btnHandler;
+
+        if (keycode == KeyEvent.KEYCODE_VOLUME_UP)
+            btnHandler = mVolumeUpLongPress;
+        else
+            btnHandler = mVolumeDownLongPress;
+
+        mHandler.postDelayed(btnHandler, ViewConfiguration.getLongPressTimeout());
+    }
+
+    void handleVolumeLongPressAbort() {
+        mHandler.removeCallbacks(mVolumeUpLongPress);
+        mHandler.removeCallbacks(mVolumeDownLongPress);
+    }
+
     class PassHeadsetKey implements Runnable {
         KeyEvent mKeyEvent;
 
@@ -3065,6 +3198,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
     };
 
+    BroadcastReceiver mPowerReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_BATTERY_CHANGED.equals(intent.getAction())) {
+                mPluggedIn = (0 != intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0));
+                if (localLOGV) Log.v(TAG, "BATTERY_CHANGED: " + intent + " plugged=" + mPluggedIn);
+            }
+        }
+    };
+
     /** {@inheritDoc} */
     public void screenTurnedOff(int why) {
         EventLog.writeEvent(70000, 0);
@@ -3076,6 +3218,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         synchronized (mLock) {
             updateOrientationListenerLp();
             updateLockScreenTimeout();
+            updateScreenSaverTimeoutLocked();
         }
     }
 
@@ -3122,6 +3265,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mScreenOnEarly = true;
             updateOrientationListenerLp();
             updateLockScreenTimeout();
+            updateScreenSaverTimeoutLocked();
         }
     }
 
@@ -3251,9 +3395,30 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     mAllowAllRotations = mContext.getResources().getBoolean(
                             com.android.internal.R.bool.config_allowAllRotations) ? 1 : 0;
                 }
-                if (sensorRotation != Surface.ROTATION_180
-                        || mAllowAllRotations == 1
-                        || orientation == ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR) {
+                // Rotation setting bitmask
+                // 1=0 2=90 4=180 8=270
+                boolean allowed = true;
+                if (mUserRotationAngles < 0) {
+                    // Not set by user so use these defaults
+                    mUserRotationAngles = mAllowAllRotations == 1 ?
+                        (1 | 2 | 4 | 8) : // All angles
+                        (1 | 2 | 8); // All except 180
+                }
+                switch (sensorRotation) {
+                    case Surface.ROTATION_0:
+                      allowed = (mUserRotationAngles & 1) != 0;
+                      break;
+                    case Surface.ROTATION_90:
+                      allowed = (mUserRotationAngles & 2) != 0;
+                      break;
+                    case Surface.ROTATION_180:
+                      allowed = (mUserRotationAngles & 4) != 0;
+                      break;
+                    case Surface.ROTATION_270:
+                      allowed = (mUserRotationAngles & 8) != 0;
+                      break;
+                }
+                if (allowed) {
                     preferredRotation = sensorRotation;
                 } else {
                     preferredRotation = lastRotation;
@@ -3520,6 +3685,85 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 mHandler.postDelayed(mScreenLockTimeout, mLockScreenTimeout);
             }
         }
+
+        synchronized (mLock) {
+            // Only posts messages; holds no additional locks.
+            updateScreenSaverTimeoutLocked();
+        }
+    }
+
+    Runnable mScreenSaverActivator = new Runnable() {
+        public void run() {
+            if (!(mScreenSaverMayRun && mScreenOnEarly)) {
+                Log.w(TAG, "mScreenSaverActivator ran, but the screensaver should not be showing. Who's driving this thing?");
+                return;
+            }
+            if (!mPluggedIn) {
+                if (localLOGV) Log.v(TAG, "mScreenSaverActivator: not running screen saver when not plugged in");
+                return;
+            }
+            // Quick fix for automation tests.
+            // The correct fix is to move this triggering logic to PowerManager, where more complete
+            // information about wakelocks (including StayOnWhilePluggedIn) is available.
+            if (Settings.System.getInt(mContext.getContentResolver(),
+                        Settings.System.STAY_ON_WHILE_PLUGGED_IN,
+                        BatteryManager.BATTERY_PLUGGED_AC) != 0) {
+                Log.v(TAG, "mScreenSaverActivator: not running screen saver when STAY_ON_WHILE_PLUGGED_IN");
+                return;
+            }
+
+            if (localLOGV) Log.v(TAG, "mScreenSaverActivator entering dreamland");
+
+            try {
+                String component = Settings.Secure.getString(
+                        mContext.getContentResolver(), Settings.Secure.SCREENSAVER_COMPONENT);
+                if (component == null) {
+                    component = mContext.getResources().getString(R.string.config_defaultDreamComponent);
+                }
+                if (component != null) {
+                    // dismiss the notification shade, recents, etc.
+                    mContext.sendBroadcast(new Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+                            .addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT));
+
+                    ComponentName cn = ComponentName.unflattenFromString(component);
+                    Intent intent = new Intent(Intent.ACTION_MAIN)
+                        .setComponent(cn)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                            | Intent.FLAG_ACTIVITY_NO_USER_ACTION
+                            | Intent.FLAG_FROM_BACKGROUND
+                            | Intent.FLAG_ACTIVITY_NO_HISTORY
+                            );
+                    mContext.startActivity(intent);
+                } else {
+                    Log.e(TAG, "Couldn't start screen saver: none selected");
+                }
+            } catch (android.content.ActivityNotFoundException exc) {
+                // no screensaver? give up
+                Log.e(TAG, "Couldn't start screen saver: none installed");
+            }
+        }
+    };
+
+    // Must call while holding mLock
+    private void updateScreenSaverTimeoutLocked() {
+        if (mScreenSaverActivator == null) return;
+
+        mHandler.removeCallbacks(mScreenSaverActivator);
+        if (mScreenSaverEnabledByUser && mScreenSaverMayRun && mScreenOnEarly && mScreenSaverTimeout > 0) {
+            if (localLOGV)
+                Log.v(TAG, "scheduling screensaver for " + mScreenSaverTimeout + "ms from now");
+            mHandler.postDelayed(mScreenSaverActivator, mScreenSaverTimeout);
+        } else {
+            if (localLOGV) {
+                if (!mScreenSaverEnabledByUser || mScreenSaverTimeout == 0)
+                    Log.v(TAG, "screen saver disabled by user");
+                else if (!mScreenOnEarly)
+                    Log.v(TAG, "screen saver disabled while screen off");
+                else
+                    Log.v(TAG, "screen saver disabled by wakelock");
+            }
+        }
     }
 
     Runnable mScreenLockTimeout = new Runnable() {
@@ -3725,6 +3969,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
     
     public void screenOnStartedLw() {
+        // The window manager has just grabbed a wake lock. This is our cue to disable the screen
+        // saver.
+        synchronized (mLock) {
+            mScreenSaverMayRun = false;
+        }
     }
 
     public void screenOnStoppedLw() {
@@ -3732,6 +3981,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             if (!mKeyguardMediator.isShowingAndNotHidden()) {
                 long curTime = SystemClock.uptimeMillis();
                 mPowerManager.userActivity(curTime, false, LocalPowerManager.OTHER_EVENT);
+            }
+
+            synchronized (mLock) {
+                // even if the keyguard is up, now that all the wakelocks have been released, we
+                // should re-enable the screen saver
+                mScreenSaverMayRun = true;
+                updateScreenSaverTimeoutLocked();
             }
         }
     }
